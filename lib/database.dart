@@ -1,11 +1,20 @@
+//【Web】--------------------------------------------
 import 'package:drift/drift.dart';
-import 'dart:io';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
-import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+import 'package:drift/wasm.dart';
 part 'database.g.dart'; // ファイル名.g.dart
+
+//【App】--------------------------------------------
+// import 'package:drift/drift.dart';
+// import 'dart:io';
+// import 'package:drift/native.dart';
+// import 'package:path_provider/path_provider.dart';
+// import 'package:path/path.dart' as p;
+// import 'package:sqlite3/sqlite3.dart';
+// import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
+// part 'database.g.dart'; // ファイル名.g.dart
+
+//【コマンド】----------------------------------------
+// flutter pub run build_runner build 
 
 class Todos extends Table{ // 1
   IntColumn get id => integer().autoIncrement()(); // 2
@@ -16,11 +25,14 @@ class Todos extends Table{ // 1
 
 @DriftDatabase(tables: [Todos])
 class Database extends _$Database {
-  Database() : super(_openConnection());
+  Database._(QueryExecutor e) : super(e); //【WEB】
+  factory Database() => Database._(connectOnWeb()); //【WEB】 
+  // Database() : super(_openConnection()); //【App】
 
   @override
   int get schemaVersion => 1;
-   Future insertTodo(String content,DateTime createDatetime) { // 1
+
+  Future insertTodo(String content,DateTime createDatetime) { // 1
     return into(todos).insert(TodosCompanion.insert(index: 0, content: content, createDatetime: createDatetime));
   }
 
@@ -59,17 +71,37 @@ class Database extends _$Database {
         .write(TodosCompanion(index: Value(index_1)));
   }
 }
-LazyDatabase _openConnection() { // 1
-  return LazyDatabase(() async {
-    final dbFloder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFloder.path, 'db.sqlite'));
-    if (Platform.isAndroid) { // 2
-      await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
+
+//【Web】--------------------------------------------
+DatabaseConnection connectOnWeb() {
+  return DatabaseConnection.delayed(Future(() async {
+    final result = await WasmDatabase.open(
+      databaseName: 'todos_db',
+      sqlite3Uri: Uri.parse('sqlite3.wasm'),
+      driftWorkerUri: Uri.parse('drift_worker.js'),
+    );
+
+    if (result.missingFeatures.isNotEmpty) {
+      print('Using ${result.chosenImplementation} due to missing browser '
+          'features: ${result.missingFeatures}');
     }
 
-    final cachebase = (await getTemporaryDirectory()).path;
-    sqlite3.tempDirectory = cachebase;
-
-    return NativeDatabase.createInBackground(file);
-  });
+    return result.resolvedExecutor;
+  }));
 }
+
+//【App】--------------------------------------------
+// LazyDatabase _openConnection() {
+//   return LazyDatabase(() async {
+//     final dbFloder = await getApplicationDocumentsDirectory();
+//     final file = File(p.join(dbFloder.path, 'db.sqlite'));
+//     if (Platform.isAndroid) {
+//       await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
+//     }
+
+//     final cachebase = (await getTemporaryDirectory()).path;
+//     sqlite3.tempDirectory = cachebase;
+
+//     return NativeDatabase.createInBackground(file);
+//   });
+// }
