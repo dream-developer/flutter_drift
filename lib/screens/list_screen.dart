@@ -7,8 +7,14 @@ import '../dialogs/delete_dialog.dart'; // 削除確認ダイアログ
 import '../validators.dart'; // バリデート
 import '../common.dart'; // Databaseオブジェクト
 
-class ListScreen extends StatelessWidget {
-  const ListScreen({ super.key });
+class ListScreen extends StatefulWidget {
+  const ListScreen({super.key});
+
+  @override
+  ListScreenState createState() => ListScreenState();
+}
+
+class ListScreenState extends State<ListScreen> {
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +29,28 @@ class ListScreen extends StatelessWidget {
           // snapshot.data![i].カラム名 では長いので
           List<Todo>  tl = snapshot.data ?? [];
           
-          return ListView.builder(        
+          // return ListView.builder(        
+          return ReorderableListView.builder( // ListView → ReorderableListView
+            onReorder: (int oldIndex, int newIndex) async{                        
+              if (oldIndex < newIndex) {
+                // 降順表示で下方向に動かした場合
+                await db.updateChangeIndex(tl[oldIndex].id, tl[oldIndex].index, tl[newIndex - 1].id, tl[newIndex - 1].index);   
+              }else{
+                // 降順表示で上方向に動かした場合
+                await db.updateChangeIndex(tl[oldIndex].id, tl[oldIndex].index, tl[newIndex].id, tl[newIndex].index);   
+              }          
+              
+              setState(() {
+                if (oldIndex < newIndex) {
+                  newIndex -= 1;
+                }
+                Todo item =  tl.removeAt(oldIndex);
+                tl.insert(newIndex, item);                                               
+              });
+            },     
             itemCount: tl.length,
             itemBuilder: (context, i) => ListTile(
-              key: Key((tl[i].id).toString()), // 1。
+              key: Key((tl[i].id).toString()), // 1
               leading: const Icon(Icons.person),
               title: Text(tl[i].content),
               subtitle: Text( 
