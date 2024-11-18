@@ -6,6 +6,8 @@ import '../snackbars.dart'; // スナックバー
 import '../dialogs/delete_dialog.dart'; // 削除確認ダイアログ
 import '../validators.dart'; // バリデート
 import '../common.dart'; // Databaseオブジェクト
+import 'package:flutter/services.dart'; 
+
 
 class ListScreen extends StatefulWidget {
   const ListScreen({super.key});
@@ -92,9 +94,10 @@ class ListScreenState extends State<ListScreen> {
 
     final controller = TextEditingController(); // 7
 
-    final addTextField = TextFormField( // 8
+    final addTextField = TextFormField( 
+      autofocus: true, // 自動フォーカス
       controller: controller,
-      validator: (value) { return validateContent(value); }, // 9
+      validator: (value) { return validateContent(value); },
       decoration: const InputDecoration(
         border: OutlineInputBorder(),
         labelText: "内容",
@@ -103,13 +106,50 @@ class ListScreenState extends State<ListScreen> {
       ),
     );
 
+    Future<KeyEventResult> manageKeyboard(KeyEvent event) async { // 1
+      final key = event.logicalKey; // 2
+      if (event is KeyDownEvent) {
+        if ( key == LogicalKeyboardKey.enter ) { // 3
+        final mytext = controller.text;
+        final res = validateContent(mytext);
+          if (res == '') {  // バリデーター通過時のみ実行
+            final insId = await db.insertTodo(mytext, DateTime.now());
+            await db.updateIndex_id1(insId);
+            
+            if (context.mounted) { 
+              ScaffoldMessenger.of(context).showSnackBar(
+                createdSnackBar("[ID:$insId]$mytext"),
+              );
+            }
+          }else{
+            ScaffoldMessenger.of(context).showSnackBar(
+              errorSnackBar(res),
+            );
+          }
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // 入力欄で「Enterキー投稿」の機能
+    final addTextFieldFocus = Focus( // 1
+      // autofocus: true にはしない(Focus側) // 2
+      onKeyEvent: (node, event) { // 3
+        manageKeyboard(event);
+        return KeyEventResult.ignored;
+      },
+      child: addTextField, // 4
+    );
+
     final body = SafeArea( // ボディー
       child: Column(
         children: [
-          Expanded( // ListViewをColumnに入れる場合は「Expanded」を使う必要がある。
-            child: list,
+          Expanded( 
+           child: list,
           ),
-          addTextField, 
+          // addTextField, 
+          addTextFieldFocus, // addTextField → addTextFieldFocus
           const SizedBox( height: 20, ), // 隙間を空ける
         ],
       )
